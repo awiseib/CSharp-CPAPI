@@ -304,7 +304,7 @@ namespace CPAPI
              string realm;
 
             // Declare our L1 Json KEY
-             string credential = "testcons";
+             string credential = "user1";
 
             // create an if statement where we set realm according to our consumer key.
             if (credential == "testcons")
@@ -319,8 +319,8 @@ namespace CPAPI
              string line;
             try
             {
-                //Read our credentials file
-                StreamReader sr = new("D:\\Code\\Python CPAPI Library\\credentials.json");
+                //Read our credentials file.
+                StreamReader sr = new(@"../../../sample_credential.json");
                 line = sr.ReadToEnd();
 
                 // Convert credentials content to JSON
