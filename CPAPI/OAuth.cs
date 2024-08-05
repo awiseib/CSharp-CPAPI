@@ -105,8 +105,8 @@ namespace CPAPI
                 Dictionary<string, string> oauth_params = new()
                 {
                     { "oauth_consumer_key", consumer_key },
-                    { "oauth_nonce", RandomNumberGenerator.GetInt32(2147483647).ToString() },
-                    { "oauth_timestamp", DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString() },
+                    { "oauth_nonce", DhRandomGenerator().ToString("X").ToLower() },
+                    { "oauth_timestamp", GenTimeStamp() },
                     { "oauth_token", access_token },
                     { "oauth_signature_method", "HMAC-SHA256" }
                 };
@@ -190,6 +190,15 @@ namespace CPAPI
             Random random = new();
 
             return random.Next(1, int.MaxValue);
+        }
+
+        static string GenTimeStamp()
+        {
+            // Interactive Brokers requires a 10 digit Unix timestamp value.
+            // Values beyond 10 digits will result in an error.
+            string timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
+            timestamp = timestamp.Substring(0, timestamp.Length - 3);
+            return timestamp;
         }
 
         private static async Task ConnectWebSocketAsync(Uri wsUri, string session_token)
@@ -385,17 +394,13 @@ namespace CPAPI
 
                 HttpRequestMessage request = new(HttpMethod.Post, lst_url);
 
-                // Interactive Brokers requires a 10 digit Unix timestamp value.
-                // Values beyond 10 digits will result in an error.
-                string timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
-                timestamp = timestamp.Substring(0, timestamp.Length - 3);
 
                 //Create a dictionary for all oauth params in our header.
                 Dictionary<string, string> oauth_params = new()
                 {
                     { "oauth_consumer_key", consumer_key },
                     { "oauth_nonce", DhRandomGenerator().ToString("X").ToLower() },
-                    { "oauth_timestamp", timestamp },
+                    { "oauth_timestamp", GenTimeStamp() },
                     { "oauth_token", access_token },
                     { "oauth_signature_method", "RSA-SHA256" },
                     { "diffie_hellman_challenge", dh_challenge.ToString("X").ToLower() }
