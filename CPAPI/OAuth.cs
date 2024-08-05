@@ -48,9 +48,9 @@ namespace CPAPI
         {
             // Read the content of our DH Param PEM file and assign the content to a String
             StreamReader sr = new(pem_fp);
-             string reader = sr.ReadToEnd();
+            string reader = sr.ReadToEnd();
             sr.Close();
-            
+
             // Find the pem field content from the StreamReader string
             PemFields pem_fields = PemEncoding.Find(reader);
 
@@ -151,7 +151,7 @@ namespace CPAPI
 
                 request.Headers.Add("Host", "api.ibkr.com");
                 request.Headers.Add("User-Agent", "csharp/6.0");
-                
+
                 request.Headers.Add("Accept", "*/*");
                 request.Headers.Add("Connection", "keep-alive");
                 request.Headers.Add("Authorization", oauth_header);
@@ -173,7 +173,7 @@ namespace CPAPI
                 {
                     WebHeaderPrint(request, response);
                 }
-                
+
                 // We want to return our response values so we can later work with them.
                 return response.Content.ReadAsStringAsync().Result;
             }
@@ -183,13 +183,13 @@ namespace CPAPI
             }
             return "";
         }
-        
+
         static BigInteger DhRandomGenerator()
         {
             // Create a Random object, and then retrieve any random positive integer value.
-            Random random = new Random();
+            Random random = new();
 
-            return random.Next(1,int.MaxValue);
+            return random.Next(1, int.MaxValue);
         }
 
         private static async Task ConnectWebSocketAsync(Uri wsUri, string session_token)
@@ -271,7 +271,7 @@ namespace CPAPI
                         try
                         {
                             JObject jmsg = JObject.Parse(message);
-                             string topic = jmsg.SelectToken("topic").ToString();
+                            string topic = jmsg.SelectToken("topic").ToString();
 
                             if (topic == "sts" && ((bool)jmsg.SelectToken("args").SelectToken("authenticated")) == true)
                             {
@@ -295,47 +295,35 @@ namespace CPAPI
 
         static async Task Main()
         {
-            HttpClientHandler clientHandler = new(){};
+            HttpClientHandler clientHandler = new() { };
 
             // HttpClient is intended to be instantiated once per application, rather than per-use.
             HttpClient client = new(clientHandler);
 
-             string base_url = "api.ibkr.com/v1/api";
-             string realm;
+            string base_url = "api.ibkr.com/v1/api";
 
             // Declare our L1 Json KEY
-             string credential = "user1";
+            string credential = "user1";
 
-            // create an if statement where we set realm according to our consumer key.
-            if (credential == "testcons")
-            {
-                realm = "test_realm";
-            }
-            else
-            {
-                realm = "limited_poa";
-            }
-
-             string line;
+            string line;
             try
             {
-                //Read our credentials file.
+                //Read our credentials file
                 StreamReader sr = new(@"../../../sample_credential.json");
                 line = sr.ReadToEnd();
 
                 // Convert credentials content to JSON
                 JObject credentials_json = JObject.Parse(line);
 
-
                 // Set our string values from the JSON L2 content.
-                 string consumer_key = credentials_json.SelectToken(credential).SelectToken("consumer_key").ToString();
-                 string access_token = credentials_json.SelectToken(credential).SelectToken("access_token").ToString();
-                 string access_token_secret = credentials_json.SelectToken(credential).SelectToken("access_token_secret").ToString();
+                string consumer_key = credentials_json.SelectToken(credential).SelectToken("consumer_key").ToString();
+                string access_token = credentials_json.SelectToken(credential).SelectToken("access_token").ToString();
+                string access_token_secret = credentials_json.SelectToken(credential).SelectToken("access_token_secret").ToString();
 
                 // Retrieve our PEM content from the JSON L2 content.
-                 string dhparam_fp = credentials_json.SelectToken(credential).SelectToken("dhparam").ToString();
-                 string encryption_fp = credentials_json.SelectToken(credential).SelectToken("encryption").ToString();
-                 string signature_fp = credentials_json.SelectToken(credential).SelectToken("signature").ToString();
+                string dhparam_fp = credentials_json.SelectToken(credential).SelectToken("dhparam").ToString();
+                string encryption_fp = credentials_json.SelectToken(credential).SelectToken("encryption").ToString();
+                string signature_fp = credentials_json.SelectToken(credential).SelectToken("signature").ToString();
 
                 //close the file
                 sr.Close();
@@ -357,6 +345,17 @@ namespace CPAPI
 
                 // Generate our dh_challenge value by calculating the result of our generator to the power of our random value, modular divided by our dh_modulus.
                 BigInteger dh_challenge = BigInteger.ModPow(dh_generator, dh_random, dh_modulus);
+
+                string realm;
+                // create an if statement where we set realm according to our consumer key.
+                if (credential == "testcons")
+                {
+                    realm = "test_realm";
+                }
+                else
+                {
+                    realm = "limited_poa";
+                }
 
                 // Create the crypto provider 
                 RSACryptoServiceProvider bytes_decrypted_secret = new()
@@ -384,19 +383,23 @@ namespace CPAPI
 
                 string lst_url = "https://" + base_url + endpoint;
 
-
                 HttpRequestMessage request = new(HttpMethod.Post, lst_url);
+
+                // Interactive Brokers requires a 10 digit Unix timestamp value.
+                // Values beyond 10 digits will result in an error.
+                string timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString();
+                timestamp = timestamp.Substring(0, timestamp.Length - 3);
 
                 //Create a dictionary for all oauth params in our header.
                 Dictionary<string, string> oauth_params = new()
-                                {
-                                    { "oauth_consumer_key", consumer_key },
-                                    { "oauth_nonce", RandomNumberGenerator.GetInt32(2147483647).ToString() },
-                                    { "oauth_timestamp", DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString() },
-                                    { "oauth_token", access_token },
-                                    { "oauth_signature_method", "RSA-SHA256" },
-                                    { "diffie_hellman_challenge", dh_challenge.ToString("X").ToLower() }
-                                };
+                {
+                    { "oauth_consumer_key", consumer_key },
+                    { "oauth_nonce", DhRandomGenerator().ToString("X").ToLower() },
+                    { "oauth_timestamp", timestamp },
+                    { "oauth_token", access_token },
+                    { "oauth_signature_method", "RSA-SHA256" },
+                    { "diffie_hellman_challenge", dh_challenge.ToString("X").ToLower() }
+                };
 
                 // Sort our oauth_params dictionary by key.
                 Dictionary<string, string> sorted_params = oauth_params.OrderBy(pair => pair.Key).ToDictionary(pair => pair.Key, pair => pair.Value);
@@ -405,7 +408,7 @@ namespace CPAPI
                 string params_string = string.Join("&", sorted_params.Select(kv => $"{kv.Key}={kv.Value}"));
 
                 // Create a base string by combining the prepend, url, and params string.
-                string base_string = $"{prepend.ToLower()}POST&{EscapeUriDataStringRfc3986(lst_url.ToLower())}&{EscapeUriDataStringRfc3986(params_string)}";
+                string base_string = $"{prepend.ToLower()}POST&{EscapeUriDataStringRfc3986(lst_url)}&{EscapeUriDataStringRfc3986(params_string)}";
 
                 // Convert our new string to a bytestring 
                 byte[] encoded_base_string = Encoding.UTF8.GetBytes(base_string);
@@ -451,9 +454,11 @@ namespace CPAPI
                 // Assemble oauth params into auth header value as comma-separated str.
                 string oauth_header = $"OAuth " + string.Join(", ", fin_sorted_params.Select(kv => $"{kv.Key}=\"{kv.Value}\""));
 
+
                 // Build out our request headers
                 request.Headers.Add("Host", "api.ibkr.com");
                 request.Headers.Add("User-Agent", "csharp/6.0");
+                request.Headers.Add("Accept-Encoding", "gzip,deflate");
                 request.Headers.Add("Accept", "*/*");
                 request.Headers.Add("Connection", "keep-alive");
                 request.Headers.Add("Authorization", oauth_header);
@@ -464,7 +469,6 @@ namespace CPAPI
                 {
                     Console.WriteLine($"Request to {endpoint} failed. Received status code {(int)response.StatusCode}");
                     await WebHeaderPrint(request, response);
-                    Console.WriteLine("LST generation failed. Be sure to check your PEM file content or request headers.");
                     Environment.Exit(1);
                 }
 
@@ -592,7 +596,7 @@ namespace CPAPI
                 JObject tickle_json = JObject.Parse(resp_content);
 
                 // From our json object, retrieve our session token from /tickle
-                 string session_token = tickle_json.SelectToken("session").ToString();
+                string session_token = tickle_json.SelectToken("session").ToString();
 
 
                 // -------------------------------------------------------------------
