@@ -223,7 +223,6 @@ namespace CPAPI
                 };
 
                 // Assign additional headers in our websocket, including origin and user-agent.
-                webSocket.Options.SetRequestHeader("Origin", "api.ibkr.com");
                 webSocket.Options.SetRequestHeader("User-Agent", "csharp/6.0");
 
                 // Send a request to connect our websocket client
@@ -302,9 +301,12 @@ namespace CPAPI
             }
         }
 
-        static async Task Main()
+        public async Task Oauth_Main()
         {
-            HttpClientHandler clientHandler = new() { };
+            HttpClientHandler clientHandler = new()
+            {
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
 
             // HttpClient is intended to be instantiated once per application, rather than per-use.
             HttpClient client = new(clientHandler);
@@ -579,13 +581,17 @@ namespace CPAPI
                 StandardRequest(client, portfolio_method, "https://" + base_url + endpoint, consumer_key, realm, access_token, computed_lst);
 
                 // -------------------------------------------------------------------
-                // Request #6: Make a call for historical market data
+                // Request #6: Init and make a call for historical market data
                 // -------------------------------------------------------------------
-                HttpMethod hmds_method = HttpMethod.Get;
-                endpoint = "/hmds/history?conid=265598&period=3600S&bar=1mins";
+
+                HttpMethod hmds_init_method = HttpMethod.Post;
+                endpoint = "/hmds/auth/init";
 
                 // Among other endpoints, the /hmds endpoint requires a pre-flight request in order to appropriately return data.
-                StandardRequest(client, hmds_method, "https://" + base_url + endpoint, consumer_key, realm, access_token, computed_lst);
+                StandardRequest(client, hmds_init_method, "https://" + base_url + endpoint, consumer_key, realm, access_token, computed_lst);
+
+                HttpMethod hmds_method = HttpMethod.Get;
+                endpoint = "/hmds/history?conid=26718738&period=5m&bar=6d&barType=Last";
                 StandardRequest(client, hmds_method, "https://" + base_url + endpoint, consumer_key, realm, access_token, computed_lst);
 
 

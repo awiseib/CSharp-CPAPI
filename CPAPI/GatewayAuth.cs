@@ -8,6 +8,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using System.Formats.Asn1;
+using System.Numerics;
+using System.Security.Cryptography;
+using System.Globalization;
+using System.Text.Json;
 
 namespace CPAPI
 {
@@ -21,10 +26,13 @@ namespace CPAPI
             cookie_jar.Add(raisin);
 
 
-            using (ClientWebSocket webSocket = new ClientWebSocket { Options = {
+            using (ClientWebSocket webSocket = new ClientWebSocket
+            {
+                Options = {
                     Cookies = cookie_jar,
                     RemoteCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true
-                } } )
+                }
+            })
             {
 
                 var exitEvent = new ManualResetEvent(false);
@@ -68,16 +76,20 @@ namespace CPAPI
                         {
                             await Send(webSocket);
                         }
-                    } catch (Exception ex)
+                    }
+                    catch (Exception ex)
                     {
                         Console.WriteLine(ex.ToString());
                     }
                 }
             }
         }
-        static async Task Main()
+        public async Task Gateway_Main()
         {
-            HttpClientHandler clientHandler = new HttpClientHandler();
+            HttpClientHandler clientHandler = new()
+            {
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
             // Ignores invalid certificate
             clientHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
 
@@ -91,7 +103,7 @@ namespace CPAPI
             {
                 String base_url = "localhost:5001/v1/api";
 
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "https://"+ base_url + "/tickle");
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "https://" + base_url + "/tickle");
                 request.Headers.Add("User-Agent", "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/6.0;)");
                 HttpResponseMessage response = client.SendAsync(request).Result;
                 String resp_content = await response.Content.ReadAsStringAsync();
