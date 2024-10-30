@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -18,6 +18,62 @@ namespace CPAPI
 {
     class GatewayAuth
     {
+        static async Task<string> WebHeaderPrint(HttpRequestMessage request, HttpResponseMessage response)
+        {
+            // Print out the request and response content of our web requests to capture headers.
+            await Console.Out.WriteLineAsync("########## Request ###########");
+            await Console.Out.WriteLineAsync($"{request.Method} {request.RequestUri}");
+            await Console.Out.WriteLineAsync(request.Headers.ToString());
+            if (request.Content != null)
+            {
+                await Console.Out.WriteLineAsync(await request.Content.ReadAsStringAsync());
+            }
+            await Console.Out.WriteLineAsync("\n########## Response ###########");
+            await Console.Out.WriteLineAsync($"{(int)response.StatusCode} {response.StatusCode.ToString()}");
+            await Console.Out.WriteLineAsync(await response.Content.ReadAsStringAsync());
+            await Console.Out.WriteLineAsync("----------------------------\n");
+
+            return response.Content.ReadAsStringAsync().Result;
+        }
+
+        static string StandardRequest(HttpClient client, HttpMethod request_method, string request_url, string req_content = "{}")
+        {
+            try
+            {
+
+                HttpRequestMessage request = new(request_method, request_url);
+
+                request.Headers.Add("Host", "api.ibkr.com");
+                request.Headers.Add("User-Agent", "csharp/6.0");
+                request.Headers.Add("Accept", "*/*");
+                request.Headers.Add("Connection", "keep-alive");
+
+                StringContent req_content_json = new(req_content, Encoding.UTF8, "application/json");
+
+                request.Content = req_content_json;
+
+                HttpResponseMessage response = client.SendAsync(request).Result;
+
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    Console.WriteLine($"Request to {request_url} failed. Received status code {(int)response.StatusCode}");
+
+                    WebHeaderPrint(request, response);
+                }
+                else
+                {
+                    WebHeaderPrint(request, response);
+                }
+
+                // We want to return our response values so we can later work with them.
+                return response.Content.ReadAsStringAsync().Result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+            return "";
+        }
         private static async Task ConnectWebSocketAsync(Uri wsUri, String session_token)
         {
 
@@ -102,17 +158,42 @@ namespace CPAPI
             try
             {
                 String base_url = "localhost:5001/v1/api";
+                String endpoint;
+                HttpMethod method;
+                string resp_content;
 
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "https://" + base_url + "/tickle");
-                request.Headers.Add("User-Agent", "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/6.0;)");
-                HttpResponseMessage response = client.SendAsync(request).Result;
-                String resp_content = await response.Content.ReadAsStringAsync();
-                Console.WriteLine(resp_content);
+                // -------------------------------------------------------------------
+                // Initialize our Brokerage Session
+                // -------------------------------------------------------------------
+                method = HttpMethod.Get;
+                endpoint = "/iserver/auth/ssodh/init";
+                string req_content = JsonSerializer.Serialize(new { compete = true, publish = true });
+                resp_content = StandardRequest(client, method, "https://" + base_url + endpoint, req_content);
 
-                JObject resp_json = JObject.Parse(resp_content);
-                String session_token = resp_json.SelectToken("session").ToString();
+                // -------------------------------------------------------------------
+                // Call /portfolio/accounts to retrieve account details
+                // -------------------------------------------------------------------
+                method = HttpMethod.Get;
+                endpoint = "/portfolio/accounts";
+                resp_content = StandardRequest(client, method, "https://" + base_url + endpoint);
+
+                // -------------------------------------------------------------------
+                // Call /tickle to retrieve the session token
+                // -------------------------------------------------------------------
+                method = HttpMethod.Get;
+                endpoint = "/tickle";
+                string tickle_resp_content = StandardRequest(client, method, "https://" + base_url + endpoint);
+
+                // Convert our response content to a json object
+                JObject tickle_json = JObject.Parse(tickle_resp_content);
+
+                // From our json object, retrieve our session token from /tickle
+                string session_token = tickle_json.SelectToken("session").ToString();
 
 
+                // -------------------------------------------------------------------
+                // Establish a websocket connection
+                // -------------------------------------------------------------------
                 var wsUri = new Uri("wss://" + base_url + "/ws");
 
                 await ConnectWebSocketAsync(wsUri, session_token);
