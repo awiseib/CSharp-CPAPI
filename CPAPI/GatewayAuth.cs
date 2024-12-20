@@ -100,14 +100,20 @@ namespace CPAPI
         }
         private static async Task Send(ClientWebSocket webSocket)
         {
-            Console.WriteLine("In Send");
+            Console.WriteLine("Sending a Market Data request");
             // Send a message to the WebSocket server
             string data = "smd+265598+{\"fields\":[\"31\",\"84\",\"86\"]}";
             ArraySegment<byte> sendBuffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(data));
             await webSocket.SendAsync(sendBuffer, WebSocketMessageType.Text, false, CancellationToken.None);
             Console.WriteLine("Sent message: " + data);
-        }
 
+            // Send a message to the WebSocket server
+            Console.WriteLine("Sending a request for Open Orders");
+            data = "sor+{}";
+            sendBuffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(data));
+            await webSocket.SendAsync(sendBuffer, WebSocketMessageType.Text, false, CancellationToken.None);
+            Console.WriteLine("Sent message: " + data);
+        }
         private static async Task Receive(ClientWebSocket webSocket)
         {
             byte[] buffer = new byte[2048];
@@ -157,25 +163,40 @@ namespace CPAPI
             // Call asynchronous network methods in a try/catch block to handle exceptions.
             try
             {
-                String base_url = "localhost:5001/v1/api";
-                String endpoint;
                 HttpMethod method;
-                string resp_content;
+                string base_url = "localhost:5001/v1/api";
+                string accountId = "DU5240685";
+                string req_content = string.Empty;
+                string endpoint = string.Empty;
+                string resp_content = string.Empty;
 
                 // -------------------------------------------------------------------
                 // Initialize our Brokerage Session
                 // -------------------------------------------------------------------
                 method = HttpMethod.Get;
                 endpoint = "/iserver/auth/ssodh/init";
-                string req_content = JsonSerializer.Serialize(new { compete = true, publish = true });
+                req_content= "{ \"compete\": true, \"publish\": true }";
                 resp_content = StandardRequest(client, method, "https://" + base_url + endpoint, req_content);
+
+                // It's important to allow the brokerage session to init
+                Thread.Sleep(1000);
 
                 // -------------------------------------------------------------------
                 // Call /portfolio/accounts to retrieve account details
                 // -------------------------------------------------------------------
                 method = HttpMethod.Get;
-                endpoint = "/portfolio/accounts";
+                endpoint = "/iserver/accounts";
                 resp_content = StandardRequest(client, method, "https://" + base_url + endpoint);
+
+                // -------------------------------------------------------------------
+                // Place an order
+                // This will place a market order for 100 AAPL shares.
+                // BE SURE TO USE A PAPER ACCOUNT!!
+                // -------------------------------------------------------------------
+                method = HttpMethod.Post;
+                endpoint = $"/iserver/account/{accountId}/orders";
+                req_content = "{\"orders\": [ {\"conid\": 265598, \"orderType\": \"MKT\", \"quantity\": 100, \"side\": \"BUY\", \"tif\": \"DAY\"} ] }";
+                resp_content = StandardRequest(client, method, "https://" + base_url + endpoint, req_content);
 
                 // -------------------------------------------------------------------
                 // Call /tickle to retrieve the session token
